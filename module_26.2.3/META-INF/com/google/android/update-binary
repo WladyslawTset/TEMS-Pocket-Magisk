@@ -1,0 +1,64 @@
+#!/sbin/sh
+
+OUTFD="$2"
+ZIPFILE="$3"
+
+ui_print() { echo "$1"; }
+
+BB="/data/adb/magisk/busybox"
+
+[ -z "$ZIPFILE" ] && ZIPFILE="$0"
+
+ui_print "- Using ZIP: $ZIPFILE"
+ui_print "- Using busybox: $BB"
+
+if [ ! -x "$BB" ]; then
+  ui_print "! busybox not found at $BB"
+  exit 1
+fi
+
+TMPDIR=$("$BB" mktemp -d /data/local/tmp/temsmod.XXXXXX 2>/dev/null)
+if [ -z "$TMPDIR" ]; then
+  ui_print "! mktemp failed"
+  exit 1
+fi
+
+ui_print "- Using TMPDIR: $TMPDIR"
+
+# Extract everything
+"$BB" unzip -o "$ZIPFILE" -d "$TMPDIR" >/dev/null 2>&1
+
+if [ ! -f "$TMPDIR/module.prop" ]; then
+  ui_print "! module.prop not found after unzip"
+  ui_print "! unzip listing:"
+  "$BB" unzip -l "$ZIPFILE" | "$BB" head -n 50
+  ui_print "! TMPDIR listing:"
+  "$BB" ls -la "$TMPDIR" | "$BB" head -n 80
+  "$BB" rm -rf "$TMPDIR" 2>/dev/null
+  exit 1
+fi
+
+MODID=$("$BB" grep '^id=' "$TMPDIR/module.prop" | "$BB" head -n 1 | "$BB" cut -d= -f2)
+if [ -z "$MODID" ]; then
+  ui_print "! empty module id"
+  "$BB" rm -rf "$TMPDIR" 2>/dev/null
+  exit 1
+fi
+
+MODDIR="/data/adb/modules/$MODID"
+
+"$BB" mkdir -p "$MODDIR"
+"$BB" cp "$TMPDIR/module.prop" "$MODDIR/"
+"$BB" cp "$TMPDIR/service.sh" "$MODDIR/"
+"$BB" cp "$TMPDIR/tems_pocket_start.sh" "$MODDIR/"
+
+"$BB" chmod 0644 "$MODDIR/module.prop"
+"$BB" chmod 0755 "$MODDIR/service.sh"
+"$BB" chmod 0755 "$MODDIR/tems_pocket_start.sh"
+
+"$BB" rm -f "$MODDIR/disable" "$MODDIR/remove" 2>/dev/null
+
+"$BB" rm -rf "$TMPDIR" 2>/dev/null
+
+ui_print "- Done"
+exit 0
